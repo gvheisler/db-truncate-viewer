@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PostgreSQL Truncate Cascade Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            color: #2c3e50;
+            background: #f8f9fa;
+        }
+
+        .tab.active {
+            color: #3498db;
+            border-bottom-color: #3498db;
+        }
+
+        .tab-content {
+            display: none;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 250px;
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        select {
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #2c3e50;
+            position: sticky;
+            top: 0;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        th:hover {
+            background: #e9ecef;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .row-count {
+            font-weight: 600;
+            color: #3498db;
+        }
+
+        .schema-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            background: #e3f2fd;
+            color: #1976d2;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .schema-badge.public {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .schema-badge.audit {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .schema-badge.anpc {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .cascade-simulator {
+            margin-top: 30px;
+        }
+
+        .simulator-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: flex-end;
+        }
+
+        .form-group {
+            flex: 1;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #2980b9;
+        }
+
+        .btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .affected-tables {
+            margin-top: 20px;
+        }
+
+        .affected-table-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            border-radius: 4px;
+        }
+
+        .affected-table-item.level-0 {
+            border-left-color: #e74c3c;
+            background: #ffebee;
+        }
+
+        .affected-table-item.level-1 {
+            border-left-color: #f39c12;
+            background: #fff3e0;
+            margin-left: 20px;
+        }
+
+        .affected-table-item.level-2 {
+            border-left-color: #3498db;
+            background: #e3f2fd;
+            margin-left: 40px;
+        }
+
+        .affected-table-item.level-3 {
+            border-left-color: #9b59b6;
+            background: #f3e5f5;
+            margin-left: 60px;
+        }
+
+        .table-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .table-reason {
+            font-size: 13px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .warning-box strong {
+            color: #856404;
+        }
+
+        .protected-tables {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .protected-tables h3 {
+            color: #155724;
+            margin-bottom: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+        }
+
+        .protected-tables h3:hover {
+            opacity: 0.8;
+        }
+
+        .collapse-icon {
+            font-size: 18px;
+            transition: transform 0.3s;
+        }
+
+        .collapse-icon.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .protected-content {
+            margin-top: 15px;
+        }
+
+        .protected-content.hidden {
+            display: none;
+        }
+
+        .protected-table-tag {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #28a745;
+            color: white;
+            border-radius: 4px;
+            margin: 4px;
+            font-size: 13px;
+        }
+
+        .table-selector {
+            margin-top: 15px;
+        }
+
+        .table-search {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #28a745;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .table-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: white;
+        }
+
+        .table-item {
+            padding: 8px 12px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .table-item:hover {
+            background: #f8f9fa;
+        }
+
+        .table-item input[type="checkbox"] {
+            cursor: pointer;
+        }
+
+        .table-item label {
+            cursor: pointer;
+            flex: 1;
+            margin: 0;
+        }
+
+        .constraints-guide {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+
+        .constraints-guide h3 {
+            color: #856404;
+            margin-bottom: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+        }
+
+        .constraints-guide h3:hover {
+            opacity: 0.8;
+        }
+
+        .constraints-content {
+            margin-top: 15px;
+        }
+
+        .constraints-content.hidden {
+            display: none;
+        }
+
+        .constraint-item {
+            padding: 10px;
+            background: white;
+            border-left: 4px solid #ffc107;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .constraint-sql {
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            margin-top: 5px;
+            overflow-x: auto;
+        }
+
+        .copy-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .copy-btn:hover {
+            background: #5a6268;
+        }
+
+        .relationship-graph {
+            margin-top: 30px;
+        }
+
+        .fk-relationship {
+            padding: 10px;
+            margin-bottom: 6px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .fk-arrow {
+            color: #3498db;
+            margin: 0 8px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗄️ PostgreSQL Truncate Cascade Viewer</h1>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('tables')">📊 Tables & Rows</button>
+            <button class="tab" onclick="switchTab('cascade')">⚠️ Truncate Simulator</button>
+            <button class="tab" onclick="switchTab('relationships')">🔗 Relationships</button>
+        </div>
+
+        <div id="tables-tab" class="tab-content active">
+            <div class="stats-grid" id="stats-grid"></div>
+            
+            <div class="controls">
+                <input type="text" class="search-box" id="search-box" placeholder="🔍 Search table...">
+                <select id="schema-filter">
+                    <option value="">All schemas</option>
+                    <option value="public">public</option>
+                    <option value="audit">audit</option>
+                    <option value="anpc">anpc</option>
+                    <option value="saude">saude</option>
+                    <option value="validacao">validacao</option>
+                </select>
+                <select id="sort-by">
+                    <option value="rows-desc">Most rows first</option>
+                    <option value="rows-asc">Least rows first</option>
+                    <option value="name-asc">Name A-Z</option>
+                    <option value="name-desc">Name Z-A</option>
+                </select>
+                <button class="btn" onclick="refreshTableCounts()" style="white-space: nowrap;">🔄 Refresh</button>
+            </div>
+
+            <div id="loading" class="loading">⏳ Loading data from database... This may take a few moments on first run.</div>
+            <div id="error" class="error" style="display: none;"></div>
+            
+            <table id="tables-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('schema')">Schema</th>
+                        <th onclick="sortTable('table')">Table</th>
+                        <th onclick="sortTable('rows')">Row Count</th>
+                    </tr>
+                </thead>
+                <tbody id="tables-body"></tbody>
+            </table>
+        </div>
+
+        <div id="cascade-tab" class="tab-content">
+            <div class="protected-tables">
+                <h3 onclick="toggleProtectedSelector()">
+                    <span>🛡️ Protected Tables (<span id="protected-count">0</span> selected)</span>
+                    <span class="collapse-icon" id="collapse-icon">▼</span>
+                </h3>
+                <div class="protected-content" id="protected-content">
+                    <div id="protected-tags"></div>
+                    
+                    <div class="table-selector">
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <input type="text" class="table-search" id="table-search" placeholder="🔍 Search table to add/remove..." style="flex: 1;">
+                            <button class="btn" onclick="refreshTablesList()" style="white-space: nowrap;">🔄 Refresh List</button>
+                        </div>
+                        <div class="table-list" id="table-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <strong>⚠️ Warning:</strong> This tool simulates the effect of a TRUNCATE CASCADE. 
+                Use it to check which tables will be affected BEFORE executing the actual command.
+            </div>
+
+            <div class="cascade-simulator">
+                <div class="simulator-controls">
+                    <div class="form-group">
+                        <label>Schema:</label>
+                        <select id="cascade-schema">
+                            <option value="public">public</option>
+                            <option value="audit">audit</option>
+                            <option value="anpc">anpc</option>
+                            <option value="saude">saude</option>
+                            <option value="validacao">validacao</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Table:</label>
+                        <input type="text" class="search-box" id="cascade-table" placeholder="e.g., users">
+                    </div>
+                    <button class="btn" onclick="simulateTruncate()">Simulate TRUNCATE CASCADE</button>
+                </div>
+
+                <div id="cascade-results"></div>
+            </div>
+        </div>
+
+        <div id="relationships-tab" class="tab-content">
+            <div class="controls">
+                <input type="text" class="search-box" id="fk-search" placeholder="🔍 Search relationship...">
+            </div>
+            <div id="fk-loading" class="loading">⏳ Loading relationships...</div>
+            <div class="relationship-graph" id="relationships-list"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin.replace(/:\d+/, ':3000');
+        
+        let tablesData = [];
+        let foreignKeysData = [];
+        let protectedTables = JSON.parse(localStorage.getItem('protectedTables') || '[]');
+        let allTables = [];
+
+        async function loadTables(forceRefresh = false) {
+            try {
+                const url = forceRefresh 
+                    ? `${API_BASE}/api/table-counts?refresh=true`
+                    : `${API_BASE}/api/table-counts`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (!Array.isArray(data)) {
+                    throw new Error('Invalid data received from server');
+                }
+                
+                tablesData = data;
+                allTables = data.map(t => ({
+                    schema: t.schemaname,
+                    table: t.tablename,
+                    fullName: `${t.schemaname}.${t.tablename}`
+                }));
+                
+                updateStats();
+                renderTables();
+                await loadTablesListForSelector();
+                renderProtectedTablesSelector();
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('tables-table').style.display = 'table';
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').textContent = 'Error loading data: ' + error.message;
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        async function loadTablesListForSelector() {
+            try {
+                const response = await fetch(`${API_BASE}/api/tables-list`);
+                const data = await response.json();
+                
+                if (Array.isArray(data) && data.length > 0) {
+                    allTables = data;
+                }
+            } catch (error) {
+                console.error('Error loading tables list:', error);
+            }
+        }
+
+        async function refreshTableCounts() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('tables-table').style.display = 'none';
+            await loadTables(true);
+        }
+
+        async function loadForeignKeys() {
+            try {
+                const response = await fetch(`${API_BASE}/api/foreign-keys`);
+                const data = await response.json();
+                foreignKeysData = data;
+                
+                renderForeignKeys();
+                document.getElementById('fk-loading').style.display = 'none';
+            } catch (error) {
+                document.getElementById('fk-loading').textContent = 'Error loading relationships: ' + error.message;
+            }
+        }
+
+        async function refreshTablesList() {
+            try {
+                const response = await fetch(`${API_BASE}/api/table-counts?refresh=true`);
+                const data = await response.json();
+                
+                if (!Array.isArray(data)) {
+                    throw new Error('Invalid data received from server');
+                }
+                
+                allTables = data.map(t => ({
+                    schema: t.schemaname,
+                    table: t.tablename,
+                    fullName: `${t.schemaname}.${t.tablename}`
+                }));
+                
+                renderTableList();
+                alert('Tables list updated!');
+            } catch (error) {
+                alert('Error updating list: ' + error.message);
+            }
+        }
+
+        function updateStats() {
+            if (!Array.isArray(tablesData) || tablesData.length === 0) {
+                return;
+            }
+            
+            const totalTables = tablesData.length;
+            const totalRows = tablesData.reduce((sum, t) => sum + parseInt(t.row_count || 0), 0);
+            const schemas = [...new Set(tablesData.map(t => t.schemaname))].length;
+            
+            const statsHtml = `
+                <div class="stat-card">
+                    <div class="stat-value">${totalTables}</div>
+                    <div class="stat-label">Total Tables</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <div class="stat-value">${totalRows.toLocaleString('en-US')}</div>
+                    <div class="stat-label">Total Rows</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <div class="stat-value">${schemas}</div>
+                    <div class="stat-label">Schemas</div>
+                </div>
+            `;
+            
+            document.getElementById('stats-grid').innerHTML = statsHtml;
+        }
+
+        function renderTables() {
+            const searchTerm = document.getElementById('search-box').value.toLowerCase();
+            const schemaFilterEl = document.getElementById('schema-filter');
+            const schemaFilter = schemaFilterEl.value;
+            const sortBy = document.getElementById('sort-by').value;
+            
+            localStorage.setItem('selectedSchema', schemaFilter);
+            
+            let filtered = tablesData.filter(table => {
+                const matchesSearch = table.tablename.toLowerCase().includes(searchTerm) ||
+                                    table.schemaname.toLowerCase().includes(searchTerm);
+                const matchesSchema = !schemaFilter || table.schemaname === schemaFilter;
+                return matchesSearch && matchesSchema;
+            });
+            
+            filtered.sort((a, b) => {
+                switch(sortBy) {
+                    case 'rows-desc':
+                        return parseInt(b.row_count || 0) - parseInt(a.row_count || 0);
+                    case 'rows-asc':
+                        return parseInt(a.row_count || 0) - parseInt(b.row_count || 0);
+                    case 'name-asc':
+                        return a.tablename.localeCompare(b.tablename);
+                    case 'name-desc':
+                        return b.tablename.localeCompare(a.tablename);
+                    default:
+                        return 0;
+                }
+            });
+            
+            const tbody = document.getElementById('tables-body');
+            tbody.innerHTML = filtered.map(table => `
+                <tr>
+                    <td><span class="schema-badge ${table.schemaname}">${table.schemaname}</span></td>
+                    <td>${table.tablename}</td>
+                    <td class="row-count">${parseInt(table.row_count || 0).toLocaleString('en-US')}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function simulateTruncate() {
+            const schema = document.getElementById('cascade-schema').value;
+            const table = document.getElementById('cascade-table').value.trim();
+            
+            if (!table) {
+                alert('Please enter the table name');
+                return;
+            }
+            
+            if (protectedTables.includes(table)) {
+                alert(`⛔ ERROR: The table "${table}" is PROTECTED and CANNOT be truncated!`);
+                return;
+            }
+            
+            const resultsDiv = document.getElementById('cascade-results');
+            resultsDiv.innerHTML = '<div class="loading">⏳ Simulating...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/simulate-truncate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tableName: table, schemaName: schema })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    resultsDiv.innerHTML = `<div class="error">${data.error}</div>`;
+                    return;
+                }
+                
+                if (foreignKeysData.length === 0) {
+                    await loadForeignKeys();
+                }
+
+                const hasProtected = data.affectedTables.some(t => 
+                    protectedTables.some(p => t.table.includes(p))
+                );
+                
+                if (hasProtected) {
+                    resultsDiv.innerHTML = `
+                        <div class="error">
+                            <strong>⛔ DANGER!</strong> This TRUNCATE CASCADE would affect PROTECTED tables!<br>
+                            DO NOT execute this command!
+                        </div>
+                        ${renderAffectedTables(data.affectedTables)}
+                    `;
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="warning-box">
+                            <strong>✅ Safe:</strong> This TRUNCATE CASCADE does not affect protected tables.
+                        </div>
+                        ${renderAffectedTables(data.affectedTables)}
+                    `;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        function renderAffectedTables(tables) {
+            const uniqueTables = [...new Set(tables.map(t => t.table))].map(tableName => {
+                return tables.find(t => t.table === tableName);
+            });
+            
+            return `
+                <div class="affected-tables">
+                    <h3>Tables that will be affected (${uniqueTables.length}):</h3>
+                    ${uniqueTables.map(t => {
+                        const isProtected = protectedTables.some(p => t.table.includes(p));
+                        return `
+                            <div class="affected-table-item level-${t.level}">
+                                <div class="table-name">
+                                    ${isProtected ? '🛡️ ' : ''}${t.table}
+                                    ${isProtected ? '<strong style="color: #c62828;"> (PROTECTED!)</strong>' : ''}
+                                </div>
+                                <div class="table-reason">${t.reason}</div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                ${renderConstraintsGuideForSimulation(tables)}
+            `;
+        }
+
+        function renderConstraintsGuideForSimulation(affectedTables) {
+            if (protectedTables.length === 0) {
+                return '';
+            }
+
+            const protectedAffected = affectedTables.filter(t => 
+                protectedTables.some(p => t.table.includes(p))
+            );
+
+            if (protectedAffected.length === 0) {
+                return '';
+            }
+
+            const constraintsToRemove = foreignKeysData.filter(fk => {
+                const targetTable = fk.foreign_table_name;
+                const targetFull = `${fk.foreign_table_schema}.${fk.foreign_table_name}`;
+                
+                return protectedTables.includes(targetTable) || 
+                       protectedTables.includes(targetFull);
+            });
+
+            if (constraintsToRemove.length === 0) {
+                return '';
+            }
+
+            const constraintsHtml = constraintsToRemove.map((fk, index) => {
+                const sqlCommand = `ALTER TABLE ${fk.table_schema}.${fk.table_name} DROP CONSTRAINT IF EXISTS ${fk.constraint_name};`;
+                return `
+                    <div class="constraint-item">
+                        <strong>${fk.table_schema}.${fk.table_name}</strong> → 
+                        <strong>${fk.foreign_table_schema}.${fk.foreign_table_name}</strong>
+                        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                            Constraint: <code>${fk.constraint_name}</code><br>
+                            Column: ${fk.column_name} → ${fk.foreign_column_name}
+                        </div>
+                        <div class="constraint-sql">
+                            ${sqlCommand}
+                            <button class="copy-btn" onclick="copyToClipboard(\`${sqlCommand}\`)">
+                                📋 Copy
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="constraints-guide" style="display: block; margin-top: 20px;">
+                    <h3 onclick="toggleConstraintsGuide()">
+                        <span>📋 Constraints Guide to Remove (${constraintsToRemove.length})</span>
+                        <span class="collapse-icon" id="constraints-collapse-icon">▼</span>
+                    </h3>
+                    <div class="constraints-content hidden" id="constraints-content">
+                        <p style="margin-bottom: 10px; color: #856404;">
+                            To prevent protected tables from being deleted in cascade, you need to remove these foreign keys:
+                        </p>
+                        ${constraintsHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleConstraintsGuide() {
+            const content = document.getElementById('constraints-content');
+            const icon = document.getElementById('constraints-collapse-icon');
+            
+            if (content && icon) {
+                content.classList.toggle('hidden');
+                icon.classList.toggle('collapsed');
+            }
+        }
+
+        function renderForeignKeys() {
+            const searchTerm = document.getElementById('fk-search').value.toLowerCase();
+            
+            const filtered = foreignKeysData.filter(fk => 
+                fk.table_name.toLowerCase().includes(searchTerm) ||
+                fk.foreign_table_name.toLowerCase().includes(searchTerm) ||
+                fk.constraint_name.toLowerCase().includes(searchTerm)
+            );
+            
+            const listDiv = document.getElementById('relationships-list');
+            listDiv.innerHTML = filtered.map(fk => `
+                <div class="fk-relationship">
+                    <span class="schema-badge ${fk.table_schema}">${fk.table_schema}</span>
+                    <strong>${fk.table_name}</strong>.<em>${fk.column_name}</em>
+                    <span class="fk-arrow">→</span>
+                    <span class="schema-badge ${fk.foreign_table_schema}">${fk.foreign_table_schema}</span>
+                    <strong>${fk.foreign_table_name}</strong>.<em>${fk.foreign_column_name}</em>
+                    <span style="color: #666; margin-left: 10px; font-size: 12px;">
+                        (${fk.constraint_name}, ON DELETE: ${fk.delete_rule})
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName + '-tab').classList.add('active');
+            
+            if (tabName === 'relationships' && foreignKeysData.length === 0) {
+                loadForeignKeys();
+            }
+        }
+
+        function renderProtectedTablesSelector() {
+            renderProtectedTags();
+            renderTableList();
+        }
+
+        function renderProtectedTags() {
+            const tagsDiv = document.getElementById('protected-tags');
+            if (protectedTables.length === 0) {
+                tagsDiv.innerHTML = '<p style="color: #666; font-style: italic;">No protected tables. Select below.</p>';
+            } else {
+                tagsDiv.innerHTML = protectedTables.map(table => 
+                    `<span class="protected-table-tag">${table}</span>`
+                ).join('');
+            }
+            
+            document.getElementById('protected-count').textContent = protectedTables.length;
+        }
+
+        function renderTableList(searchTerm = '') {
+            const listDiv = document.getElementById('table-list');
+            
+            const filtered = allTables.filter(t => 
+                t.table.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                t.schema.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                t.fullName.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+
+            listDiv.innerHTML = filtered.map(t => {
+                const isProtected = protectedTables.includes(t.table) || 
+                                  protectedTables.includes(t.fullName);
+                return `
+                    <div class="table-item">
+                        <input type="checkbox" 
+                               id="table-${t.schema}-${t.table}" 
+                               ${isProtected ? 'checked' : ''}
+                               onchange="toggleProtectedTable('${t.table}', '${t.fullName}')">
+                        <label for="table-${t.schema}-${t.table}">
+                            <span class="schema-badge ${t.schema}">${t.schema}</span>
+                            ${t.table}
+                        </label>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleProtectedTable(tableName, fullName) {
+            const index1 = protectedTables.indexOf(tableName);
+            const index2 = protectedTables.indexOf(fullName);
+            
+            if (index1 !== -1) {
+                protectedTables.splice(index1, 1);
+            } else if (index2 !== -1) {
+                protectedTables.splice(index2, 1);
+            } else {
+                protectedTables.push(tableName);
+            }
+            
+            localStorage.setItem('protectedTables', JSON.stringify(protectedTables));
+            
+            renderProtectedTags();
+        }
+
+        function toggleProtectedSelector() {
+            const content = document.getElementById('protected-content');
+            const icon = document.getElementById('collapse-icon');
+            
+            content.classList.toggle('hidden');
+            icon.classList.toggle('collapsed');
+        }
+
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('SQL copied to clipboard!');
+            }).catch(err => {
+                console.error('Error copying:', err);
+            });
+        }
+
+        function restoreSchemaSelection() {
+            const savedSchema = localStorage.getItem('selectedSchema');
+            if (savedSchema) {
+                const schemaFilter = document.getElementById('schema-filter');
+                if (schemaFilter) {
+                    schemaFilter.value = savedSchema;
+                }
+            }
+            
+            const savedCascadeSchema = localStorage.getItem('selectedCascadeSchema');
+            if (savedCascadeSchema) {
+                const cascadeSchema = document.getElementById('cascade-schema');
+                if (cascadeSchema) {
+                    cascadeSchema.value = savedCascadeSchema;
+                }
+            }
+        }
+
+        document.getElementById('search-box').addEventListener('input', renderTables);
+        document.getElementById('schema-filter').addEventListener('change', renderTables);
+        document.getElementById('sort-by').addEventListener('change', renderTables);
+        document.getElementById('fk-search').addEventListener('input', renderForeignKeys);
+        document.getElementById('table-search').addEventListener('input', (e) => {
+            renderTableList(e.target.value);
+        });
+        document.getElementById('cascade-schema').addEventListener('change', (e) => {
+            localStorage.setItem('selectedCascadeSchema', e.target.value);
+        });
+
+        restoreSchemaSelection();
+        loadTables();
+    </script>
+</body>
+</html>
